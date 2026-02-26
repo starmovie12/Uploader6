@@ -155,7 +155,8 @@ export async function extractMovieLinks(url: string) {
       const parentText = $parent.text().trim();
       if (isJunkLink(parentText)) return;
       
-      const isTargetDomain = ["hblinks", "hubdrive", "hubcdn", "hubcloud", "gdflix", "drivehub"].some(d => link.includes(d));
+      // FIX: Added 'gadgetsweb' to recognized target domains
+      const isTargetDomain = ["hblinks", "hubdrive", "hubcdn", "hubcloud", "gdflix", "drivehub", "gadgetsweb"].some(d => link.includes(d));
       const isDownloadText = ["DOWNLOAD", "720P", "480P", "1080P", "4K", "DIRECT", "GDRIVE"].some(t => text.toUpperCase().includes(t));
 
       if (isTargetDomain || isDownloadText) {
@@ -453,27 +454,19 @@ export interface HubCloudNativeResult {
 
 /**
  * MAIN HUBCLOUD SOLVER
- * Directly calls your custom Python API to bypass Cloudflare securely.
+ * Directly calls your custom Python API (Port 5001) to bypass Cloudflare securely.
  */
 export async function solveHubCloudNative(url: string): Promise<HubCloudNativeResult> {
-  // HARDCODED CUSTOM SERVER API URL (PLAN A)
   const apiBase = "http://85.121.5.246:5001/solve?url=";
-
   console.log(`[HubCloud] 🚀 Starting API Solver: ${url}`);
-
   try {
     const apiUrl = apiBase + encodeURIComponent(url);
-    console.log(`[HubCloud API] 🌐 Calling: ${apiBase}...`);
-
     const resp = await axios.get(apiUrl, {
-      timeout: 25000, // cloudscraper needs more time
+      timeout: 25000,
       headers: { 'User-Agent': 'MflixPro/1.0' },
     });
-
     const data = resp.data;
-
     if (data.status === 'success' && data.best_download_link) {
-      console.log(`[HubCloud API] ✅ Success: ${data.best_button_name}`);
       return {
         status: 'success',
         best_button_name: data.best_button_name || undefined,
@@ -481,12 +474,32 @@ export async function solveHubCloudNative(url: string): Promise<HubCloudNativeRe
         all_available_buttons: data.all_available_buttons || [],
       };
     }
-
-    console.log(`[HubCloud API] ❌ Failed: ${data.message || 'unknown'}`);
     return { status: 'error', message: data.message || 'No download link from API' };
-
   } catch (e: any) {
-    console.error(`[HubCloud API] ❌ Error: ${e.message}`);
     return { status: 'error', message: `API error: ${e.message}` };
+  }
+}
+
+/**
+ * GADGETSWEB BYPASS SOLVER (NEW ENGINE)
+ * Directly calls Port 10000 for Timer & Cloudflare bypass.
+ */
+export async function solveGadgetsWebNative(url: string) {
+  const apiBase = "http://85.121.5.246:10000/solve?url=";
+  console.log(`[Bypass] ⚡ Starting GadgetsWeb Solver (Port 10000): ${url}`);
+  try {
+    const apiUrl = apiBase + encodeURIComponent(url);
+    const resp = await axios.get(apiUrl, {
+      timeout: 35000, // Bypass needs more time for timer
+      headers: { 'User-Agent': 'MflixPro/1.0' },
+    });
+    const data = resp.data;
+    if (data.status === 'success') {
+      console.log(`[Bypass] ✅ Successfully extracted: ${data.extracted_link}`);
+      return { status: "success", link: data.extracted_link };
+    }
+    return { status: "error", message: data.message || "Bypass failed" };
+  } catch (e: any) {
+    return { status: "error", message: `Bypass Port 10000 error: ${e.message}` };
   }
 }
