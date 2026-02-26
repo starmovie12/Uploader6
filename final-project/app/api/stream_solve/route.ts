@@ -1,12 +1,12 @@
 export const maxDuration = 60;
 
 import { db } from '@/lib/firebaseAdmin';
-// FIX: Added solveGadgetsWebNative to imports
+// FIX: Imports are correctly handled
 import { solveHBLinks, solveHubCDN, solveHubDrive, solveHubCloudNative, solveGadgetsWebNative } from '@/lib/solvers';
 
 const TIMER_API = 'http://85.121.5.246:10000/solve?url=';
 
-// FIX: Increased timeout to 40000ms (40 seconds) for slow timer bypasses
+// FIX: 40s timeout is good, but we must use it wisely
 const fetchJSON = async (url: string, timeoutMs = 40000) => {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -86,15 +86,14 @@ export async function POST(req: Request) {
             
             sendLog('⏳ Timer bypass...', 'warn');
             try {
-              // FIX: Use solveGadgetsWebNative for gadgetsweb links explicitly
               if (currentLink.includes('gadgetsweb')) {
+                // Port 10000 calling
                 const r = await solveGadgetsWebNative(currentLink);
                 if (r.status === 'success') {
                   currentLink = r.link!;
                   sendLog('✅ Timer bypassed', 'success');
                 } else throw new Error(r.message || 'Bypass failed');
               } else {
-                // Generic fallback for other timer domains
                 const r = await fetchJSON(TIMER_API + encodeURIComponent(currentLink));
                 if (r.status === 'success') {
                   currentLink = r.extracted_link;
@@ -136,7 +135,7 @@ export async function POST(req: Request) {
             }
           }
 
-          // ── HUBCLOUD (port 5001 FIXED via lib/solvers) ──
+          // ── HUBCLOUD (port 5001 FIXED) ──
           if (currentLink.includes('hubcloud') || currentLink.includes('hubcdn')) {
             sendLog('⚡ HubCloud direct link...', 'info');
             const r = await solveHubCloudNative(currentLink);
@@ -165,7 +164,7 @@ export async function POST(req: Request) {
           sendLog(`⚠️ Error: ${e.message}`, 'error');
           finalResults.set(lid, { ...linkData, status: 'error', error: e.message, logs });
         } finally {
-          // ── Save to Firestore ──
+          // Firestore save logic logic remains same
           const saved = finalResults.get(lid) || { ...linkData, status: 'error', logs };
           if (taskId) {
             try {
@@ -203,8 +202,12 @@ export async function POST(req: Request) {
         }
       };
 
-      // ── PARALLEL processing for speed ──
-      await Promise.all(links.map((link: any, idx: number) => processLink(link, idx)));
+      // ── FIXED: SEQUENTIAL processing to prevent VPS Overload ──
+      // Parallel (Promise.all) was causing "Operation Aborted" due to server stress.
+      for (let i = 0; i < links.length; i++) {
+        await processLink(links[i], i);
+      }
+      
       controller.close();
     },
   });
