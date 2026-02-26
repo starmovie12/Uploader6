@@ -1,12 +1,13 @@
 export const maxDuration = 60;
 
 import { db } from '@/lib/firebaseAdmin';
-import { solveHBLinks, solveHubCDN, solveHubDrive, solveHubCloudNative } from '@/lib/solvers';
+// FIX: Added solveGadgetsWebNative to imports
+import { solveHBLinks, solveHubCDN, solveHubDrive, solveHubCloudNative, solveGadgetsWebNative } from '@/lib/solvers';
 
 const TIMER_API = 'http://85.121.5.246:10000/solve?url=';
 
-// Fast fetch helper with timeout
-const fetchJSON = async (url: string, timeoutMs = 20000) => {
+// FIX: Increased timeout to 40000ms (40 seconds) for slow timer bypasses
+const fetchJSON = async (url: string, timeoutMs = 40000) => {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -76,19 +77,30 @@ export async function POST(req: Request) {
             return;
           }
 
-          // ── TIMER BYPASS ──
+          // ── TIMER BYPASS (RECOGNIZED GADGETSWEB) ──
           const targetDomains = ['hblinks', 'hubdrive', 'hubcdn', 'hubcloud'];
           let loopCount = 0;
           while (loopCount < 3 && !targetDomains.some(d => currentLink.includes(d))) {
             const isTimer = ['gadgetsweb', 'review-tech', 'ngwin', 'cryptoinsights'].some(x => currentLink.includes(x));
             if (!isTimer && loopCount === 0) break;
+            
             sendLog('⏳ Timer bypass...', 'warn');
             try {
-              const r = await fetchJSON(TIMER_API + encodeURIComponent(currentLink));
-              if (r.status === 'success') {
-                currentLink = r.extracted_link;
-                sendLog('✅ Timer bypassed', 'success');
-              } else throw new Error(r.message || 'Timer failed');
+              // FIX: Use solveGadgetsWebNative for gadgetsweb links explicitly
+              if (currentLink.includes('gadgetsweb')) {
+                const r = await solveGadgetsWebNative(currentLink);
+                if (r.status === 'success') {
+                  currentLink = r.link!;
+                  sendLog('✅ Timer bypassed', 'success');
+                } else throw new Error(r.message || 'Bypass failed');
+              } else {
+                // Generic fallback for other timer domains
+                const r = await fetchJSON(TIMER_API + encodeURIComponent(currentLink));
+                if (r.status === 'success') {
+                  currentLink = r.extracted_link;
+                  sendLog('✅ Timer bypassed', 'success');
+                } else throw new Error(r.message || 'Timer failed');
+              }
             } catch (e: any) {
               sendLog(`❌ Timer: ${e.message}`, 'error');
               break;
@@ -124,7 +136,7 @@ export async function POST(req: Request) {
             }
           }
 
-          // ── HUBCLOUD (port 5001 FIXED) ──
+          // ── HUBCLOUD (port 5001 FIXED via lib/solvers) ──
           if (currentLink.includes('hubcloud') || currentLink.includes('hubcdn')) {
             sendLog('⚡ HubCloud direct link...', 'info');
             const r = await solveHubCloudNative(currentLink);
