@@ -31,10 +31,11 @@ const MOBILE_HEADERS = {
 
 /**
  * Native Node.js implementation of the hblinks.dad solver.
+ * FIX: Timeout set to 0 (Infinite wait)
  */
 export async function solveHBLinks(url: string) {
   try {
-    const response = await axios.get(url, { headers: BROWSER_HEADERS, timeout: 8000 });
+    const response = await axios.get(url, { headers: BROWSER_HEADERS, timeout: 0 });
 
     if (response.status !== 200) {
       return { status: "fail", message: `Cannot open page. Status: ${response.status}` };
@@ -155,8 +156,7 @@ export async function extractMovieLinks(url: string) {
       const parentText = $parent.text().trim();
       if (isJunkLink(parentText)) return;
       
-      // FIX: Added 'gadgetsweb' to recognized target domains
-      const isTargetDomain = ["hblinks", "hubdrive", "hubcdn", "hubcloud", "gdflix", "drivehub", "gadgetsweb"].some(d => link.includes(d));
+      const isTargetDomain = ["hblinks", "hubdrive", "hubcdn", "hubcloud", "gdflix", "drivehub"].some(d => link.includes(d));
       const isDownloadText = ["DOWNLOAD", "720P", "480P", "1080P", "4K", "DIRECT", "GDRIVE"].some(t => text.toUpperCase().includes(t));
 
       if (isTargetDomain || isDownloadText) {
@@ -347,6 +347,10 @@ export function extractMovieMetadata(html: string): {
   };
 }
 
+/**
+ * solveHubCDN
+ * FIX: Timeout set to 0 (Infinite wait)
+ */
 export async function solveHubCDN(url: string) {
   const headers = {
     ...MOBILE_HEADERS,
@@ -356,7 +360,7 @@ export async function solveHubCDN(url: string) {
     let targetUrl = url;
 
     if (!url.includes("/dl/")) {
-      const resp = await axios.get(url, { headers, timeout: 8000 });
+      const resp = await axios.get(url, { headers, timeout: 0 });
       const html = resp.data;
       
       const reurlMatch = html.match(/var reurl = "(.*?)"/);
@@ -373,7 +377,7 @@ export async function solveHubCDN(url: string) {
       }
     }
 
-    const finalResp = await axios.get(targetUrl, { headers, timeout: 8000 });
+    const finalResp = await axios.get(targetUrl, { headers, timeout: 0 });
     const $ = cheerio.load(finalResp.data);
     
     const linkTag = $('a#vd');
@@ -395,9 +399,13 @@ export async function solveHubCDN(url: string) {
   }
 }
 
+/**
+ * solveHubDrive
+ * FIX: Timeout set to 0 (Infinite wait)
+ */
 export async function solveHubDrive(url: string) {
   try {
-    const response = await axios.get(url, { headers: BROWSER_HEADERS, timeout: 8000 });
+    const response = await axios.get(url, { headers: BROWSER_HEADERS, timeout: 0 });
     const $ = cheerio.load(response.data);
 
     let finalLink = "";
@@ -455,6 +463,7 @@ export interface HubCloudNativeResult {
 /**
  * MAIN HUBCLOUD SOLVER
  * Directly calls your custom Python API (Port 5001) to bypass Cloudflare securely.
+ * FIX: Timeout set to 0 (Infinite wait)
  */
 export async function solveHubCloudNative(url: string): Promise<HubCloudNativeResult> {
   const apiBase = "http://85.121.5.246:5001/solve?url=";
@@ -462,7 +471,7 @@ export async function solveHubCloudNative(url: string): Promise<HubCloudNativeRe
   try {
     const apiUrl = apiBase + encodeURIComponent(url);
     const resp = await axios.get(apiUrl, {
-      timeout: 25000,
+      timeout: 0,
       headers: { 'User-Agent': 'MflixPro/1.0' },
     });
     const data = resp.data;
@@ -483,6 +492,7 @@ export async function solveHubCloudNative(url: string): Promise<HubCloudNativeRe
 /**
  * GADGETSWEB BYPASS SOLVER (NEW ENGINE)
  * Directly calls Port 10000 for Timer & Cloudflare bypass.
+ * FIX: Timeout set to 0 (Infinite wait)
  */
 export async function solveGadgetsWebNative(url: string) {
   const apiBase = "http://85.121.5.246:10000/solve?url=";
@@ -490,7 +500,7 @@ export async function solveGadgetsWebNative(url: string) {
   try {
     const apiUrl = apiBase + encodeURIComponent(url);
     const resp = await axios.get(apiUrl, {
-      timeout: 35000, // Bypass needs more time for timer
+      timeout: 0, 
       headers: { 'User-Agent': 'MflixPro/1.0' },
     });
     const data = resp.data;
